@@ -10,7 +10,7 @@ class Strategy_Halfday_reversal(object):
     def __init__(self,file_data='HS300 DATA.xlsx'):
         self.stock_hs300 = [] #沪深300股票代码
         self.Data_hs300 = None #沪深300股票数据
-        self._N = 50 #每次持有股票数量
+        self._N = 30 #每次持有股票数量
         self._compound = True
         self.Bench_Ret = None #benchmark的收益率
         self.ReadData(file_data)
@@ -178,3 +178,18 @@ class Strategy_Halfday_reversal(object):
             else:
                 plt.show()
         return None
+
+if __name__ == '__main__':
+    S = Strategy_Halfday_reversal()
+    Ret_CO = S.Strategy_CO()
+    Ret_OC = S.Strategy_OC()
+    Result_CO = S.Strategy_Evaluate(name='Strategy_CO',Ret=Ret_CO.Strategy_CO_Ret,plot_bench=True,save_fig=True)
+    Result_OC = S.Strategy_Evaluate(name='Strategy_OC',Ret=Ret_OC.Strategy_OC_Ret,plot_bench=True,bench_name='Bench_Ret_OC',save_fig=True)
+    IC_CO,IR_CO,_ = S.Factor_Evaluate(factor_name='Ret_CO',ret_name='Ret_OC',lay=1,group=5,
+                                                title_name='Strategy_CO_5Group',save_fig=True)
+    _,_,GroupRet_CO = S.Factor_Evaluate(factor_name='Ret_CO', ret_name='Ret_OC', lay=1, group=10,
+                                        title_name='Strategy_CO_10Group', save_fig=True)
+    IC_OC,IR_OC,_ = S.Factor_Evaluate(factor_name='Ret_OC',ret_name='Ret_CO',lay=0,group=5,
+                                                title_name='Strategy_OC_GroupReturn',save_fig=True)
+    _, _, GroupRet_OC = S.Factor_Evaluate(factor_name='Ret_OC',ret_name='Ret_CO',lay=0,group=10,
+                                          title_name='Strategy_OC_10Group', save_fig=True)
