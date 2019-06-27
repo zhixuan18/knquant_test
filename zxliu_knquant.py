@@ -1,7 +1,10 @@
 ###knquant笔试
+#-*- coding: utf-8 -*-
 import numpy as np
 import pandas as pd
+pd.set_option('display.max_columns',None)
 import math
+import matplotlib.pyplot as plt
 
 class Strategy_Halfday_reversal(object):
     def __init__(self):
@@ -43,19 +46,19 @@ class Strategy_Halfday_reversal(object):
 
     # 计算根据close-to-open收益率,持有期为night策略的每日收益率
     def Strategy_CO(self):
-        Strategy_CO_ret = pd.DataFrame(index=self.Data_hs300.index[1:-1], columns=['Strategy_CO_Ret'])
+        Strategy_CO_ret = pd.DataFrame(index=self.Data_hs300.index[1:-1],columns=['Strategy_CO_Ret'],dtype=np.float64)
         for i in range(len(self.Data_hs300) - 2):
             date = self.Data_hs300.index[i]
             Ret_CO_tmp = self.Data_hs300.loc[date, (slice(None), 'Ret_CO')]
             # 持有close-to-open收益率最低的N只股票
             Holding_Stock = Ret_CO_tmp.sort_values(ascending=True).iloc[:self._N].reset_index().level_0
-            holding_date = self.Data_hs300.index[i + 1]
+            holding_date = self.Data_hs300.index[i+1]
             Strategy_CO_ret.iloc[i] = self.Data_hs300.loc[holding_date, (Holding_Stock, 'Ret_OC')].mean()
         return Strategy_CO_ret
 
     # 计算根据open-to-close收益率,持有期为day策略的每日收益率
     def Strategy_OC(self):
-        Strategy_OC_ret = pd.DataFrame(index=self.Data_hs300.index[1:-1], columns=['Strategy_OC_Ret'])
+        Strategy_OC_ret = pd.DataFrame(index=self.Data_hs300.index[1:-1],columns=['Strategy_OC_Ret'],dtype=np.float64)
         for i in range(len(self.Data_hs300) - 2):
             date = self.Data_hs300.index[i+1]
             Ret_OC_tmp = self.Data_hs300.loc[date, (slice(None), 'Ret_OC')]
@@ -65,13 +68,62 @@ class Strategy_Halfday_reversal(object):
             Strategy_OC_ret.iloc[i] = self.Data_hs300.loc[holding_date, (Holding_Stock, 'Ret_CO')].mean()
         return Strategy_OC_ret
 
-    # 策略评价,包括计算总收益率,年化收益率,收益率方差,夏普比率,最大回撤率,最大回撤期,策略每日换手率,画累计收益
-    def Strategy_Evaluate(self,plot_=True):
-        pass
+    # 计算最大回撤率和最大回撤期
+    def Max_Drawdown(self,Ret_cum):
+        Drawdown = Ret_cum/Ret_cum.cummax()
+        max_drawdown = Drawdown.min()-1
+        drawdown_end = Drawdown.idxmin()
+        drawdown_begin = Drawdown.loc[:drawdown_end].idxmax()
+        return (max_drawdown,drawdown_begin,drawdown_end)
+
+    # 策略评价,包括计算总收益率,年化收益率,收益率方差,夏普比率,最大回撤率,最大回撤期,画累计收益
+    def Strategy_Evaluate(self,name,Ret,plot_bench=False,bench_name='Bench_Ret_OC',save_fig=False,compound=True):
+        # Ret为2年的收益率Series,plot_bench=True画出benchmark的收益率曲线,compound=True计算复利
+        Result = pd.DataFrame(index=[name])
+        Result['begin date'] = Ret.index[0]
+        Result['end date'] = Ret.index[-1]
+        if compound:
+            Ret_cum = (Ret+1).cumprod()
+            Result['annual return'] = Ret_cum.iloc[-1]**0.5-1
+        else:
+            Ret_cum = Ret.cumsum()+1
+            Result['annual return'] = Ret_cum.iloc[-1]/2-1
+        Result['total return'] = Ret_cum.iloc[-1]-1
+        Result['daily return std'] = Ret.std()
+        Result['mean/std of daily return'] = Ret.mean()/Ret.std()
+        Drawdown_info = self.Max_Drawdown(Ret_cum)
+        Result['Max Drawdown'] = Drawdown_info[0]
+        Result['Max Drawdown begin'] = Drawdown_info[1]
+        Result['Max Drawdown end'] = Drawdown_info[2]
+        #绘图
+        plt.figure(figsize=(12,6))
+        x = Ret_cum.index
+        ret_cum = Ret_cum.values
+        plt.plot(ret_cum,linewidth=2,linestyle='-',label=name)
+        if plot_bench:
+            if compound:
+                bench_cc = (self.Bench_Ret['Bench_Ret_CC']+1).cumprod().values
+                bench = (self.Bench_Ret[bench_name]+1).cumprod().values
+            else:
+                bench_cc = (self.Bench_Ret['Bench_Ret_CC'].cumsum()+1).values
+                bench = (self.Bench_Ret[bench_name].cumsum()+1).values
+            plt.plot(bench_cc,linewidth=2,linestyle='-',label='Bench_Ret_CC')
+            plt.plot(bench,linewidth=2,linestyle='-',label=bench_name)
+        plt.legend(loc=0)
+        plt.xlim(-1,len(x)+1)
+        x_tick = range(0,len(x),20)
+        x_label = [x[i].strftime('%Y-%m-%d') for i in x_tick]
+        plt.xticks(x_tick,x_label,rotation=0)
+        plt.title(name)
+        if save_fig:
+            plt.savefig(name+'.png')
+        else:
+            plt.show()
+        return Result
 
     # 将所有股票简单平均加权作为benchmark,计算benchmark的收益率
     def Cal_Bench_Ret(self):
-        Bench_Ret = pd.DataFrame(index=self.Data_hs300.index[1:-2],columns=['Bench_Ret_CC','Bench_Ret_CO','Bench_Ret_OC'])
+        Bench_Ret = pd.DataFrame(index=self.Data_hs300.index[1:-2],columns=['Bench_Ret_CC','Bench_Ret_CO','Bench_Ret_OC'],dtype=np.float64)
         for date in self.Data_hs300.index[1:-2]:
             Bench_Ret.loc[date,'Bench_Ret_CC'] = self.Data_hs300.loc[date,(slice(None),'Ret_CC')].mean()
             Bench_Ret.loc[date,'Bench_Ret_CO'] = self.Data_hs300.loc[date, (slice(None),'Ret_CO')].mean()
