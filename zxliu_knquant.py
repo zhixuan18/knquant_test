@@ -7,11 +7,15 @@ import math
 import matplotlib.pyplot as plt
 
 class Strategy_Halfday_reversal(object):
-    def __init__(self):
+    def __init__(self,file_data='HS300 DATA.xlsx'):
         self.stock_hs300 = [] #沪深300股票代码
         self.Data_hs300 = None #沪深300股票数据
         self._N = 50 #每次持有股票数量
+        self._compound = True
         self.Bench_Ret = None #benchmark的收益率
+        self.ReadData(file_data)
+        self.Cal_Ret()
+        self.Cal_Bench_Ret()
 
     #可修改购买股票的数量
     @property
@@ -21,8 +25,15 @@ class Strategy_Halfday_reversal(object):
     def N(self,value):
         self._N = value
 
+    @property
+    def compound(self):
+        return self._compound
+    @compound.setter
+    def compound(self,value):
+        self._compound = value
+
     # 读取HS300 DATA数据
-    def ReadData(self,file_data='HS300 DATA.xlsx'):
+    def ReadData(self,file_data):
         Data = pd.read_excel(file_data)
         Data_hs300_tmp = []
         for i in range(math.ceil(Data.shape[1] / 4)):
@@ -77,12 +88,12 @@ class Strategy_Halfday_reversal(object):
         return (max_drawdown,drawdown_begin,drawdown_end)
 
     # 策略评价,包括计算总收益率,年化收益率,收益率方差,夏普比率,最大回撤率,最大回撤期,画累计收益
-    def Strategy_Evaluate(self,name,Ret,plot_bench=False,bench_name='Bench_Ret_OC',save_fig=False,compound=True):
+    def Strategy_Evaluate(self,name,Ret,plot_bench=False,bench_name='Bench_Ret_OC',save_fig=False):
         # Ret为2年的收益率Series,plot_bench=True画出benchmark的收益率曲线,compound=True计算复利
         Result = pd.DataFrame(index=[name])
         Result['begin date'] = Ret.index[0]
         Result['end date'] = Ret.index[-1]
-        if compound:
+        if self._compound:
             Ret_cum = (Ret+1).cumprod()
             Result['annual return'] = Ret_cum.iloc[-1]**0.5-1
         else:
@@ -101,7 +112,7 @@ class Strategy_Halfday_reversal(object):
         ret_cum = Ret_cum.values
         plt.plot(ret_cum,linewidth=2,linestyle='-',label=name)
         if plot_bench:
-            if compound:
+            if self._compound:
                 bench_cc = (self.Bench_Ret['Bench_Ret_CC']+1).cumprod().values
                 bench = (self.Bench_Ret[bench_name]+1).cumprod().values
             else:
@@ -132,5 +143,38 @@ class Strategy_Halfday_reversal(object):
         return None
 
     # 因子评价,包括计算IC,IR,分组收益率
-    def Factor_Evaluate(self):
-        pass
+    def Factor_Evaluate(self,factor_name,ret_name,lay=0,group=10,title_name=None,save_fig=False):
+        IC_df = pd.DataFrame(index=self.Data_hs300.index[1:-1],columns=['IC','RankIC'],dtype=np.float64)
+        GroupRet = pd.DataFrame(index=self.Data_hs300.index[1:-1],columns=['group'+str(j+1) for j in range(group)],dtype=np.float64)
+        for i in range(len(self.Data_hs300)-2):
+            holding_date = self.Data_hs300.index[i+1]
+            date = self.Data_hs300.index[i+1-lay]
+            factor_tmp = self.Data_hs300.loc[date,(slice(None),factor_name)].reset_index(level=1,drop=True).astype(np.float64)
+            factor_tmp.name = 'factor'
+            ret_tmp = self.Data_hs300.loc[holding_date,(slice(None),ret_name)].reset_index(level=1,drop=True).astype(np.float64)
+            ret_tmp.name = 'ret'
+            IC_df.loc[holding_date,'IC'] = factor_tmp.corr(ret_tmp,method='pearson')
+            IC_df.loc[holding_date,'RankIC'] = factor_tmp.corr(ret_tmp,method='spearman')
+            tmp = pd.concat([factor_tmp,ret_tmp],axis=1).dropna()
+            tmp['factor_rank'] = tmp['factor'].rank(pct=True)
+            for j in range(group):
+                GroupRet.loc[holding_date,'group'+str(j+1)] = tmp[(tmp['factor_rank']>j/group)&(tmp['factor_rank']<(j+1)/group)]['ret'].mean()
+        IR = IC_df.mean()/IC_df.std()
+        self.GroupRet_plot(GroupRet,title_name,save_fig)
+        return (IC_df,IR,GroupRet)
+
+    #画分组累积收益率图
+    def GroupRet_plot(self,GroupRet,title_name=None,save_fig=False):
+        if self._compound:
+            (GroupRet+1).cumprod().plot()
+        else:
+            (GroupRet.cumsum()+1).plot()
+        if title_name is None:
+            plt.show()
+        else:
+            plt.title(title_name)
+            if save_fig:
+                plt.savefig(title_name+'.png')
+            else:
+                plt.show()
+        return None
