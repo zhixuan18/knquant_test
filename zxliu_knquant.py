@@ -88,7 +88,7 @@ class Strategy_Halfday_reversal(object):
         Drawdown = Ret_cum / Ret_cum.cummax()
         max_drawdown = Drawdown.min() - 1
         drawdown_end = Drawdown.idxmin()
-        drawdown_begin = Drawdown.loc[:drawdown_end].idxmax()
+        drawdown_begin = Ret_cum.loc[:drawdown_end].idxmax()
         return (max_drawdown, drawdown_begin, drawdown_end)
 
     # 策略评价,包括计算总收益率,年化收益率,收益率方差,夏普比率,最大回撤率,最大回撤期,画累计收益
@@ -146,11 +146,11 @@ class Strategy_Halfday_reversal(object):
         self.Bench_Ret = Bench_Ret
         return None
 
-    def plot_Bench_Ret(self,save_fig=False):
+    def plot_Bench_Ret(self, save_fig=False):
         if self._compound:
-            (self.Bench_Ret+1).cumprod().plot(figsize=(12,6))
+            (self.Bench_Ret + 1).cumprod().plot(figsize=(12, 6))
         else:
-            (self.Bench_Ret.cumsum()+1).plot(figsize=(12,6))
+            (self.Bench_Ret.cumsum() + 1).plot(figsize=(12, 6))
         plt.title('Benchmark Return')
         plt.ylabel('Cumulative Return')
         if save_fig:
@@ -176,10 +176,10 @@ class Strategy_Halfday_reversal(object):
             tmp['factor_rank'] = tmp['factor'].rank(pct=True)
             for j in range(group):
                 GroupRet.loc[holding_date, 'group' + str(j + 1)] = tmp[(tmp['factor_rank'] > j / group) & (tmp['factor_rank'] < (j + 1) / group)]['ret'].mean()
-        ICIR_df = pd.DataFrame(index=['IC','RankIC'],columns=['mean','<0 per cent','IR'])
+        ICIR_df = pd.DataFrame(index=['IC', 'RankIC'], columns=['mean', '<0 per cent', 'IR'])
         ICIR_df['mean'] = IC_df.mean()
-        ICIR_df['<0 per cent'] = (IC_df<0).sum()/len(IC_df)
-        ICIR_df['IR'] = IC_df.mean()/IC_df.std()
+        ICIR_df['<0 per cent'] = (IC_df < 0).sum() / len(IC_df)
+        ICIR_df['IR'] = IC_df.mean() / IC_df.std()
         self.GroupRet_plot(GroupRet, title_name, save_fig)
         return (ICIR_df, GroupRet)
 
@@ -202,18 +202,26 @@ class Strategy_Halfday_reversal(object):
 
 if __name__ == '__main__':
     S = Strategy_Halfday_reversal()
-    # S.plot_Bench_Ret(save_fig=True)
-    # Ret_CO = S.Strategy_CO()
-    # Result_CO = S.Strategy_Evaluate(name='Strategy_CO', Ret=Ret_CO.Strategy_CO_Ret, plot_bench=True, save_fig=True)
-    # Result_CO.to_csv('Strategy_CO_Resule.csv')
-    # ICIR_CO, _ = S.Factor_Evaluate(factor_name='Ret_CO', ret_name='Ret_OC', lay=1, group=5,
-    #                                     title_name='Strategy_CO_5Group', save_fig=True)
-    # ICIR_CO.to_csv('Strategy_CO_IC.csv')
-    # _, _ = S.Factor_Evaluate(factor_name='Ret_CO', ret_name='Ret_OC', lay=1, group=10,
-    #                                       title_name='Strategy_CO_10Group', save_fig=True)
-    # Ret_OC = S.Strategy_OC()
-    # Result_OC = S.Strategy_Evaluate(name='Strategy_OC', Ret=Ret_OC.Strategy_OC_Ret, plot_bench=True, bench_name='Bench_Ret_OC', save_fig=True)
-    # ICIR_OC, _ = S.Factor_Evaluate(factor_name='Ret_OC', ret_name='Ret_CO', lay=0, group=5,
-    #                                     title_name='Strategy_OC_GroupReturn', save_fig=True)
-    # _, GroupRet_OC = S.Factor_Evaluate(factor_name='Ret_OC', ret_name='Ret_CO', lay=0, group=10,
-    #                                       title_name='Strategy_OC_10Group', save_fig=True)
+    # 画出benchmark收益率曲线
+    S.plot_Bench_Ret(save_fig=True)
+    # 评价Strategy_CO
+    Ret_CO = S.Strategy_CO()
+    Result_CO = S.Strategy_Evaluate(name='Strategy_CO', Ret=Ret_CO.Strategy_CO_Ret, plot_bench=True, save_fig=True)
+    Result_CO.to_csv('Strategy_CO_Result.csv')
+    _ = S.Strategy_Evaluate(name='Strategy_CO - bench', Ret=Ret_CO.Strategy_CO_Ret - S.Bench_Ret.Bench_Ret_OC, save_fig=True)
+    ICIR_CO, _ = S.Factor_Evaluate(factor_name='Ret_CO', ret_name='Ret_OC', lay=1, group=5,
+                                   title_name='Strategy_CO_5Group', save_fig=True)
+    ICIR_CO.to_csv('Strategy_CO_IC.csv')
+    _, _ = S.Factor_Evaluate(factor_name='Ret_CO', ret_name='Ret_OC', lay=1, group=10,
+                             title_name='Strategy_CO_10Group', save_fig=True)
+    # 评价Strategy_OC
+    Ret_OC = S.Strategy_OC()
+    Result_OC = S.Strategy_Evaluate(name='Strategy_OC', Ret=Ret_OC.Strategy_OC_Ret, plot_bench=True,
+                                    bench_name='Bench_Ret_CO', save_fig=True)
+    Result_OC.to_csv('Strategy_OC_Result.csv')
+    _ = S.Strategy_Evaluate(name='Strategy_OC - bench', Ret=Ret_OC.Strategy_OC_Ret - S.Bench_Ret.Bench_Ret_CO, save_fig=True)
+    ICIR_OC, _ = S.Factor_Evaluate(factor_name='Ret_OC', ret_name='Ret_CO', lay=0, group=5,
+                                   title_name='Strategy_OC_5Group', save_fig=True)
+    ICIR_OC.to_csv('Strategy_OC_IC.csv')
+    _, _ = S.Factor_Evaluate(factor_name='Ret_OC', ret_name='Ret_CO', lay=0, group=10,
+                             title_name='Strategy_OC_10Group', save_fig=True)
